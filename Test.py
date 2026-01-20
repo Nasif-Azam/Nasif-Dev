@@ -91,7 +91,7 @@ class FabricDeploymentManager:
             print(f"[ERROR] Error in create_workspace: {e}")
             raise
     
-    def assign_role_to_workspace(self, workspace_id, principal_id, principal_type="Application", role="Admin"):
+    def assign_role_to_workspace(self, workspace_id, principal_id, principal_type="App", role="Admin"):
         """Assign role to Service Principal in workspace"""
         if self.skip_role_assignment:
             print(f"[SKIP] Skipping role assignment (SKIP_ROLE_ASSIGNMENT=true)")

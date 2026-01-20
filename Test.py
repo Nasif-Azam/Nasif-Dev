@@ -91,7 +91,7 @@ class FabricDeploymentManager:
             print(f"[ERROR] Error in create_workspace: {e}")
             raise
     
-    def assign_role_to_workspace(self, workspace_id, principal_id, principal_type="ServicePrincipal", role="Admin"):
+    def assign_role_to_workspace(self, workspace_id, principal_id, principal_type="Application", role="Admin"):
         """Assign role to Service Principal in workspace"""
         if self.skip_role_assignment:
             print(f"[SKIP] Skipping role assignment (SKIP_ROLE_ASSIGNMENT=true)")
@@ -133,17 +133,8 @@ class FabricDeploymentManager:
                 items = response.json().get('value', [])
                 print(f"[OK] Retrieved {len(items)} items from workspace '{workspace_id}'")
                 return items
-            elif response.status_code == 401:
-                print(f"[ERROR] Authentication failed (401). Service Principal may not have access to workspace '{workspace_id}'")
-                print(f"[ERROR] Response: {response.text}")
-                return []
-            elif response.status_code == 403:
-                print(f"[ERROR] Permission denied (403). Service Principal does not have access to workspace items")
-                print(f"[ERROR] Response: {response.text}")
-                return []
             else:
                 print(f"[ERROR] Error retrieving items: {response.status_code}")
-                print(f"[ERROR] Response: {response.text}")
                 return []
         except Exception as e:
             print(f"[ERROR] Error in get_workspace_items: {e}")
@@ -189,12 +180,8 @@ class FabricDeploymentManager:
             print("[1/5] Generating Fabric Access Token...")
             self.get_access_token()
             
-            # Step 2: Assign Role to Dev Workspace
-            print("\n[2/5] Assigning Role to Dev Workspace...")
-            self.assign_role_to_workspace(self.dev_workspace_id, self.client_id)
-            
-            # Step 3: Create/Verify Prod Workspace
-            print("\n[3/5] Creating/Verifying Prod Workspace...")
+            # Step 2: Create/Verify Prod Workspace
+            print("\n[2/5] Creating/Verifying Prod Workspace...")
             prod_ws = self.create_workspace(self.prod_workspace_name, self.prod_workspace_id)
             if not prod_ws:
                 print("[ERROR] Failed to create/verify Prod workspace")
@@ -202,20 +189,20 @@ class FabricDeploymentManager:
             
             prod_ws_id = prod_ws.get('id', self.prod_workspace_id)
             
-            # Step 4: Assign Role to Prod Workspace
-            print("\n[4/5] Assigning Role to Prod Workspace...")
+            # Step 3: Assign Role to Prod Workspace
+            print("\n[3/5] Assigning Role to Prod Workspace...")
             self.assign_role_to_workspace(prod_ws_id, self.client_id)
             
-            # Step 5: Get items from Dev Workspace
-            print("\n[6/6] Retrieving items from Dev Workspace...")
+            # Step 4: Get items from Dev Workspace
+            print("\n[4/5] Retrieving items from Dev Workspace...")
             dev_items = self.get_workspace_items(self.dev_workspace_id)
             
             if not dev_items:
                 print("[ERROR] No items found in Dev workspace")
                 return False
             
-            # Step 7: Deploy items to Prod Workspace
-            print("\n[7/7] Deploying items to Prod Workspace...")
+            # Step 5: Deploy items to Prod Workspace
+            print("\n[5/5] Deploying items to Prod Workspace...")
             successful_deployments = 0
             
             for item in dev_items:

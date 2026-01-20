@@ -198,24 +198,20 @@ class FabricDeploymentManager:
             
             prod_ws_id = prod_ws.get('id', self.prod_workspace_id)
             
-            # Step 3: Assign Role to Dev Workspace (for reading items)
-            print("\n[3/5] Assigning Role to Dev Workspace...")
-            self.assign_role_to_workspace(self.dev_workspace_id, self.client_id)
-            
-            # Step 4: Assign Role to Prod Workspace
-            print("\n[4/5] Assigning Role to Prod Workspace...")
+            # Step 3: Assign Role to Prod Workspace
+            print("\n[3/5] Assigning Role to Prod Workspace...")
             self.assign_role_to_workspace(prod_ws_id, self.client_id)
             
-            # Step 5: Get items from Dev Workspace
-            print("\n[5/5] Retrieving items from Dev Workspace...")
+            # Step 4: Get items from Dev Workspace
+            print("\n[4/5] Retrieving items from Dev Workspace...")
             dev_items = self.get_workspace_items(self.dev_workspace_id)
             
             if not dev_items:
                 print("[ERROR] No items found in Dev workspace")
                 return False
             
-            # Step 6: Deploy items to Prod Workspace
-            print("\n[6/6] Deploying items to Prod Workspace...")
+            # Step 5: Deploy items to Prod Workspace
+            print("\n[5/5] Deploying items to Prod Workspace...")
             successful_deployments = 0
             
             for item in dev_items:

@@ -117,11 +117,13 @@ class FabricDeploymentManager:
                 print(f"[OK] Role '{role}' assigned to workspace '{workspace_id}'")
                 return True
             else:
-                print(f"[ERROR] Error assigning role: {response.status_code} - {response.text}")
-                return False
+                print(f"[WARNING] Role assignment failed: {response.status_code} - {response.text}")
+                print(f"[INFO] Continuing deployment without role assignment...")
+                return True  # Don't block deployment
         except Exception as e:
-            print(f"[ERROR] Error in assign_role_to_workspace: {e}")
-            return False
+            print(f"[WARNING] Error in assign_role_to_workspace: {e}")
+            print(f"[INFO] Continuing deployment without role assignment...")
+            return True  # Don't block deployment
     
     def get_workspace_items(self, workspace_id):
         """Get all items from a workspace"""

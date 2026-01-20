@@ -145,13 +145,17 @@ class FabricDeploymentManager:
         except requests.exceptions.RequestException as e:
             # Handle 409 Conflict - workspace already exists
             if hasattr(e, 'response') and e.response.status_code == 409:
-                logger.info(f"✓ Workspace '{workspace_name}' already exists (retrieving details...)")
-                # Try to get the workspace details
-                existing = self._get_workspace_by_name(workspace_name)
-                if existing:
-                    return existing
-                # If still can't find it, return a minimal response with the name
-                return {"displayName": workspace_name, "id": "unknown"}
+                logger.info(f"✓ Workspace '{workspace_name}' already exists")
+                # Retry to get the workspace details
+                for attempt in range(3):
+                    time.sleep(1)
+                    existing = self._get_workspace_by_name(workspace_name)
+                    if existing:
+                        logger.info(f"✓ Retrieved existing workspace (ID: {existing['id']})")
+                        return existing
+                
+                logger.error(f"✗ Could not retrieve existing workspace '{workspace_name}' details")
+                return None
             
             logger.error(f"✗ Failed to create workspace: {str(e)}")
             if hasattr(e, 'response') and hasattr(e.response, 'text'):
@@ -171,14 +175,35 @@ class FabricDeploymentManager:
         url = f"{self.fabric_api_base}/workspaces"
         
         try:
-            response = requests.get(url, headers=self._get_headers())
-            response.raise_for_status()
-            
-            workspaces = response.json().get("value", [])
-            for workspace in workspaces:
-                if workspace.get("displayName") == workspace_name:
-                    return workspace
+            # Try multiple times with pagination in case of temporary issues
+            for attempt in range(3):
+                try:
+                    response = requests.get(url, headers=self._get_headers(), timeout=10)
+                    response.raise_for_status()
                     
+                    workspaces = response.json().get("value", [])
+                    for workspace in workspaces:
+                        if workspace.get("displayName") == workspace_name:
+                            logger.info(f"✓ Found workspace '{workspace_name}' (ID: {workspace['id']})")
+                            return workspace
+                    
+                    # If not found, check if there's a next page
+                    continuation_token = response.json().get("continuationToken")
+                    if continuation_token:
+                        url = f"{self.fabric_api_base}/workspaces?continuationToken={continuation_token}"
+                        continue
+                    else:
+                        break
+                        
+                except requests.exceptions.Timeout:
+                    if attempt < 2:
+                        logger.info(f"Timeout retrieving workspaces, retrying... (attempt {attempt + 1}/3)")
+                        time.sleep(2)
+                        continue
+                    else:
+                        raise
+            
+            logger.warning(f"Workspace '{workspace_name}' not found in list")
             return None
             
         except requests.exceptions.RequestException as e:

@@ -5,6 +5,10 @@ import requests
 from typing import Dict, Optional, List
 from datetime import datetime
 import time
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(

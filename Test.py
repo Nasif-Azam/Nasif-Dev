@@ -77,22 +77,13 @@ class FabricDeploymentManager:
                 print(f"[OK] Workspace '{workspace_name}' created successfully")
                 return workspace
             elif response.status_code == 409:
-                # Workspace already exists, retrieve it by listing and finding by name
-                print(f"[INFO] Workspace already exists, retrieving...")
-                list_response = requests.get(
-                    f"{self.fabric_api_url}/workspaces",
-                    headers=self.get_headers()
-                )
-                
-                if list_response.status_code == 200:
-                    workspaces = list_response.json().get('value', [])
-                    for ws in workspaces:
-                        if ws.get('displayName') == workspace_name:
-                            print(f"[OK] Found existing workspace '{workspace_name}'")
-                            return ws
-                
-                print(f"[ERROR] Error retrieving existing workspace: {response.text}")
-                return None
+                # Workspace already exists, use the provided workspace_id
+                print(f"[OK] Workspace '{workspace_name}' already exists")
+                if workspace_id:
+                    return {"id": workspace_id, "displayName": workspace_name}
+                else:
+                    print(f"[ERROR] Workspace exists but no workspace_id provided")
+                    return None
             else:
                 print(f"[ERROR] Error creating workspace: {response.status_code} - {response.text}")
                 return None

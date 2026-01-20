@@ -216,11 +216,10 @@ class FabricDeploymentManager:
             return True
             
         except requests.exceptions.RequestException as e:
-            # Log as warning instead of error if it fails
-            # User may already have the role or workspace name is used as ID
-            logger.warning(f"⚠ Could not assign role (may already exist): {str(e)}")
-            logger.info("Continuing with deployment - you may already have admin access...")
-            return True  # Don't block deployment
+            logger.error(f"✗ Failed to assign role: {str(e)}")
+            if hasattr(e.response, 'text'):
+                logger.error(f"Response: {e.response.text}")
+            return False
     
     def get_workspace_items(self, workspace_id: str) -> Optional[List[Dict]]:
         """
@@ -367,8 +366,9 @@ def load_config_from_env() -> Dict[str, str]:
         "capacity_id": os.getenv("CAPACITY_ID_ENV"),
         "dev_workspace_name": os.getenv("DEV_WORKSPACE_NAME", "Dev"),
         "prod_workspace_name": os.getenv("PROD_WORKSPACE_NAME", "Prod"),
-        "dev_workspace_id": os.getenv("DEV_WORKSPACE_ID"),  # Optional direct ID
-        "prod_workspace_id": os.getenv("PROD_WORKSPACE_ID")  # Optional direct ID
+        "dev_workspace_id": os.getenv("DEV_WORKSPACE_ID", ""),
+        "prod_workspace_id": os.getenv("PROD_WORKSPACE_ID", ""),
+        "skip_role_assignment": os.getenv("SKIP_ROLE_ASSIGNMENT", "false").lower() == "true"
     }
     
     # Validate required fields
@@ -403,40 +403,50 @@ def main():
         logger.info("STEP 1: Creating/Verifying Prod Workspace")
         logger.info("="*60)
         
-        prod_workspace = manager.create_workspace(config["prod_workspace_name"])
-        if not prod_workspace:
-            logger.error("Failed to create/verify Prod workspace. Exiting.")
-            return
+        # Use provided workspace ID if available, otherwise try to create/find workspace
+        if config["prod_workspace_id"]:
+            logger.info(f"Using provided Prod workspace ID: {config['prod_workspace_id']}")
+            prod_workspace_id = config["prod_workspace_id"]
+        else:
+            prod_workspace = manager.create_workspace(config["prod_workspace_name"])
+            if not prod_workspace:
+                logger.error("Failed to create/verify Prod workspace. Exiting.")
+                return
+            prod_workspace_id = prod_workspace.get("id")
         
-        prod_workspace_id = prod_workspace.get("id")
-        
-        # Step 2: Assign roles to Service Principal
+        # Step 2: Assign roles to Service Principal (skip if flag is set)
         logger.info("\n" + "="*60)
         logger.info("STEP 2: Assigning Roles to Service Principal")
         logger.info("="*60)
         
-        # Assign Admin role to the service principal
-        manager.assign_role_to_user(
-            workspace_id=prod_workspace_id,
-            user_principal=config["client_id"],
-            role="Admin"
-        )
+        if config["skip_role_assignment"]:
+            logger.info("⊘ Skipping role assignment (SKIP_ROLE_ASSIGNMENT=true)")
+        else:
+            # Assign Admin role to the service principal
+            role_assigned = manager.assign_role_to_user(
+                workspace_id=prod_workspace_id,
+                user_principal=config["client_id"],
+                role="Admin"
+            )
+            if not role_assigned:
+                logger.warning("Role assignment failed. Continuing with deployment...")
         
         # Step 3: Get Dev workspace and deploy items
         logger.info("\n" + "="*60)
         logger.info("STEP 3: Deploying Items from Dev to Prod")
         logger.info("="*60)
         
-        # Get Dev workspace - use ID if provided, otherwise look up by name
+        # Use provided workspace ID if available, otherwise try to find workspace
         if config["dev_workspace_id"]:
+            logger.info(f"Using provided Dev workspace ID: {config['dev_workspace_id']}")
             dev_workspace_id = config["dev_workspace_id"]
-            logger.info(f"Using Dev workspace ID from config: {dev_workspace_id}")
         else:
+            # Get Dev workspace
             dev_workspace = manager._get_workspace_by_name(config["dev_workspace_name"])
             if not dev_workspace:
                 logger.error(f"Dev workspace '{config['dev_workspace_name']}' not found")
-                logger.info("You can provide DEV_WORKSPACE_ID directly in .env file to bypass this")
                 return
+            
             dev_workspace_id = dev_workspace.get("id")
             logger.info(f"Found Dev workspace (ID: {dev_workspace_id})")
         

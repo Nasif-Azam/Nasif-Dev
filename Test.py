@@ -36,10 +36,10 @@ class FabricDeploymentManager:
             )
             token = credential.get_token("https://api.fabric.microsoft.com/.default")
             self.access_token = token.token
-            print("✓ Access token generated successfully")
+            print("[OK] Access token generated successfully")
             return self.access_token
         except Exception as e:
-            print(f"✗ Error generating access token: {e}")
+            print(f"[ERROR] Error generating access token: {e}")
             raise
     
     def get_headers(self):
@@ -57,7 +57,7 @@ class FabricDeploymentManager:
             response = requests.get(url, headers=self.get_headers())
             
             if response.status_code == 200 and workspace_id:
-                print(f"✓ Workspace '{workspace_name}' already exists")
+                print(f"[OK] Workspace '{workspace_name}' already exists")
                 return response.json()
             
             # Create new workspace
@@ -73,19 +73,19 @@ class FabricDeploymentManager:
             
             if response.status_code in [200, 201]:
                 workspace = response.json()
-                print(f"✓ Workspace '{workspace_name}' created successfully")
+                print(f"[OK] Workspace '{workspace_name}' created successfully")
                 return workspace
             else:
-                print(f"✗ Error creating workspace: {response.status_code} - {response.text}")
+                print(f"[ERROR] Error creating workspace: {response.status_code} - {response.text}")
                 return None
         except Exception as e:
-            print(f"✗ Error in create_workspace: {e}")
+            print(f"[ERROR] Error in create_workspace: {e}")
             raise
     
     def assign_role_to_workspace(self, workspace_id, principal_id, principal_type="Application", role="Admin"):
         """Assign role to Service Principal in workspace"""
         if self.skip_role_assignment:
-            print(f"⊘ Skipping role assignment (SKIP_ROLE_ASSIGNMENT=true)")
+            print(f"[SKIP] Skipping role assignment (SKIP_ROLE_ASSIGNMENT=true)")
             return True
         
         try:
@@ -105,13 +105,13 @@ class FabricDeploymentManager:
             )
             
             if response.status_code in [200, 201]:
-                print(f"✓ Role '{role}' assigned to workspace '{workspace_id}'")
+                print(f"[OK] Role '{role}' assigned to workspace '{workspace_id}'")
                 return True
             else:
-                print(f"✗ Error assigning role: {response.status_code} - {response.text}")
+                print(f"[ERROR] Error assigning role: {response.status_code} - {response.text}")
                 return False
         except Exception as e:
-            print(f"✗ Error in assign_role_to_workspace: {e}")
+            print(f"[ERROR] Error in assign_role_to_workspace: {e}")
             return False
     
     def get_workspace_items(self, workspace_id):
@@ -122,13 +122,13 @@ class FabricDeploymentManager:
             
             if response.status_code == 200:
                 items = response.json().get('value', [])
-                print(f"✓ Retrieved {len(items)} items from workspace '{workspace_id}'")
+                print(f"[OK] Retrieved {len(items)} items from workspace '{workspace_id}'")
                 return items
             else:
-                print(f"✗ Error retrieving items: {response.status_code}")
+                print(f"[ERROR] Error retrieving items: {response.status_code}")
                 return []
         except Exception as e:
-            print(f"✗ Error in get_workspace_items: {e}")
+            print(f"[ERROR] Error in get_workspace_items: {e}")
             return []
     
     def copy_item_to_workspace(self, item, source_workspace_id, target_workspace_id):
@@ -151,13 +151,13 @@ class FabricDeploymentManager:
             )
             
             if response.status_code in [200, 202]:
-                print(f"✓ Item '{item_name}' ({item_type}) copied successfully")
+                print(f"[OK] Item '{item_name}' ({item_type}) copied successfully")
                 return True
             else:
-                print(f"✗ Error copying item '{item_name}': {response.status_code}")
+                print(f"[ERROR] Error copying item '{item_name}': {response.status_code}")
                 return False
         except Exception as e:
-            print(f"✗ Error in copy_item_to_workspace: {e}")
+            print(f"[ERROR] Error in copy_item_to_workspace: {e}")
             return False
     
     def deploy_all_items(self):
@@ -175,7 +175,7 @@ class FabricDeploymentManager:
             print("\n[2/5] Creating/Verifying Prod Workspace...")
             prod_ws = self.create_workspace(self.prod_workspace_name, self.prod_workspace_id)
             if not prod_ws:
-                print("✗ Failed to create/verify Prod workspace")
+                print("[ERROR] Failed to create/verify Prod workspace")
                 return False
             
             prod_ws_id = prod_ws.get('id', self.prod_workspace_id)
@@ -189,7 +189,7 @@ class FabricDeploymentManager:
             dev_items = self.get_workspace_items(self.dev_workspace_id)
             
             if not dev_items:
-                print("✗ No items found in Dev workspace")
+                print("[ERROR] No items found in Dev workspace")
                 return False
             
             # Step 5: Deploy items to Prod Workspace
@@ -207,7 +207,7 @@ class FabricDeploymentManager:
             
             return True
         except Exception as e:
-            print(f"\n✗ Deployment failed: {e}")
+            print(f"\n[ERROR] Deployment failed: {e}")
             return False
 
 if __name__ == "__main__":

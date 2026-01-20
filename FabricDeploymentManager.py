@@ -143,8 +143,18 @@ class FabricDeploymentManager:
             return workspace_data
             
         except requests.exceptions.RequestException as e:
+            # Handle 409 Conflict - workspace already exists
+            if hasattr(e, 'response') and e.response.status_code == 409:
+                logger.info(f"✓ Workspace '{workspace_name}' already exists (retrieving details...)")
+                # Try to get the workspace details
+                existing = self._get_workspace_by_name(workspace_name)
+                if existing:
+                    return existing
+                # If still can't find it, return a minimal response with the name
+                return {"displayName": workspace_name, "id": "unknown"}
+            
             logger.error(f"✗ Failed to create workspace: {str(e)}")
-            if hasattr(e.response, 'text'):
+            if hasattr(e, 'response') and hasattr(e.response, 'text'):
                 logger.error(f"Response: {e.response.text}")
             return None
     

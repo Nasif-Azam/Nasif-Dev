@@ -52,10 +52,14 @@ class FabricDeploymentManager:
     def create_workspace(self, workspace_name, workspace_id=None):
         """Create workspace if it doesn't exist"""
         try:
-            # If workspace_id is provided, use it directly (workspace already exists)
+            # Check if workspace exists by ID
             if workspace_id:
-                print(f"[OK] Using existing workspace '{workspace_name}' with ID: {workspace_id}")
-                return {"id": workspace_id, "displayName": workspace_name}
+                url = f"{self.fabric_api_url}/workspaces/{workspace_id}"
+                response = requests.get(url, headers=self.get_headers())
+                
+                if response.status_code == 200:
+                    print(f"[OK] Workspace '{workspace_name}' already exists")
+                    return response.json()
             
             # Create new workspace
             payload = {
@@ -73,9 +77,22 @@ class FabricDeploymentManager:
                 print(f"[OK] Workspace '{workspace_name}' created successfully")
                 return workspace
             elif response.status_code == 409:
-                # Workspace with this name already exists
-                print(f"[OK] Workspace '{workspace_name}' already exists")
-                return {"displayName": workspace_name}
+                # Workspace already exists, retrieve it by listing and finding by name
+                print(f"[INFO] Workspace already exists, retrieving...")
+                list_response = requests.get(
+                    f"{self.fabric_api_url}/workspaces",
+                    headers=self.get_headers()
+                )
+                
+                if list_response.status_code == 200:
+                    workspaces = list_response.json().get('value', [])
+                    for ws in workspaces:
+                        if ws.get('displayName') == workspace_name:
+                            print(f"[OK] Found existing workspace '{workspace_name}'")
+                            return ws
+                
+                print(f"[ERROR] Error retrieving existing workspace: {response.text}")
+                return None
             else:
                 print(f"[ERROR] Error creating workspace: {response.status_code} - {response.text}")
                 return None
@@ -181,20 +198,24 @@ class FabricDeploymentManager:
             
             prod_ws_id = prod_ws.get('id', self.prod_workspace_id)
             
-            # Step 3: Assign Role to Prod Workspace
-            print("\n[3/5] Assigning Role to Prod Workspace...")
+            # Step 3: Assign Role to Dev Workspace (for reading items)
+            print("\n[3/5] Assigning Role to Dev Workspace...")
+            self.assign_role_to_workspace(self.dev_workspace_id, self.client_id)
+            
+            # Step 4: Assign Role to Prod Workspace
+            print("\n[4/5] Assigning Role to Prod Workspace...")
             self.assign_role_to_workspace(prod_ws_id, self.client_id)
             
-            # Step 4: Get items from Dev Workspace
-            print("\n[4/5] Retrieving items from Dev Workspace...")
+            # Step 5: Get items from Dev Workspace
+            print("\n[5/5] Retrieving items from Dev Workspace...")
             dev_items = self.get_workspace_items(self.dev_workspace_id)
             
             if not dev_items:
                 print("[ERROR] No items found in Dev workspace")
                 return False
             
-            # Step 5: Deploy items to Prod Workspace
-            print("\n[5/5] Deploying items to Prod Workspace...")
+            # Step 6: Deploy items to Prod Workspace
+            print("\n[6/6] Deploying items to Prod Workspace...")
             successful_deployments = 0
             
             for item in dev_items:

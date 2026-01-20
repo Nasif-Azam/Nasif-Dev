@@ -366,7 +366,9 @@ def load_config_from_env() -> Dict[str, str]:
         "client_secret": os.getenv("CLIENT_SECRET_ENV"),
         "capacity_id": os.getenv("CAPACITY_ID_ENV"),
         "dev_workspace_name": os.getenv("DEV_WORKSPACE_NAME", "Dev"),
-        "prod_workspace_name": os.getenv("PROD_WORKSPACE_NAME", "Prod")
+        "prod_workspace_name": os.getenv("PROD_WORKSPACE_NAME", "Prod"),
+        "dev_workspace_id": os.getenv("DEV_WORKSPACE_ID"),  # Optional direct ID
+        "prod_workspace_id": os.getenv("PROD_WORKSPACE_ID")  # Optional direct ID
     }
     
     # Validate required fields
@@ -425,14 +427,18 @@ def main():
         logger.info("STEP 3: Deploying Items from Dev to Prod")
         logger.info("="*60)
         
-        # Get Dev workspace
-        dev_workspace = manager._get_workspace_by_name(config["dev_workspace_name"])
-        if not dev_workspace:
-            logger.error(f"Dev workspace '{config['dev_workspace_name']}' not found")
-            return
-        
-        dev_workspace_id = dev_workspace.get("id")
-        logger.info(f"Found Dev workspace (ID: {dev_workspace_id})")
+        # Get Dev workspace - use ID if provided, otherwise look up by name
+        if config["dev_workspace_id"]:
+            dev_workspace_id = config["dev_workspace_id"]
+            logger.info(f"Using Dev workspace ID from config: {dev_workspace_id}")
+        else:
+            dev_workspace = manager._get_workspace_by_name(config["dev_workspace_name"])
+            if not dev_workspace:
+                logger.error(f"Dev workspace '{config['dev_workspace_name']}' not found")
+                logger.info("You can provide DEV_WORKSPACE_ID directly in .env file to bypass this")
+                return
+            dev_workspace_id = dev_workspace.get("id")
+            logger.info(f"Found Dev workspace (ID: {dev_workspace_id})")
         
         # Deploy items (you can specify item_types to filter)
         # Example: item_types=["Report", "SemanticModel"]

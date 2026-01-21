@@ -6,8 +6,6 @@ from typing import Dict, Optional, List
 from datetime import datetime
 import time
 from dotenv import load_dotenv
-import shutil
-from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
@@ -249,74 +247,6 @@ class FabricDeploymentManager:
             logger.error(f"✗ Failed to retrieve workspace items: {str(e)}")
             return None
     
-    def get_items_from_github(self, github_repo_path: str, branch: str = "Dev-Branch") -> Optional[List[Dict]]:
-        """
-        Retrieve Fabric items from GitHub repository structure.
-        
-        Args:
-            github_repo_path: Local path to the GitHub repository
-            branch: Git branch name (for reference)
-            
-        Returns:
-            List: List of items found in the repository
-        """
-        logger.info(f"Retrieving items from GitHub repository: {github_repo_path}")
-        
-        items = []
-        development_path = os.path.join(github_repo_path, "Development")
-        
-        if not os.path.exists(development_path):
-            logger.error(f"✗ Development folder not found at {development_path}")
-            return None
-        
-        try:
-            # Scan the Development folder for Fabric items
-            for item_name in os.listdir(development_path):
-                item_path = os.path.join(development_path, item_name)
-                
-                if not os.path.isdir(item_path):
-                    continue
-                
-                # Identify item type based on folder name pattern
-                item_type = None
-                display_name = None
-                
-                if ".Dataflow" in item_name:
-                    item_type = "Dataflow"
-                    display_name = item_name.replace(".Dataflow", "")
-                elif ".Lakehouse" in item_name:
-                    item_type = "Lakehouse"
-                    display_name = item_name.replace(".Lakehouse", "")
-                elif ".Report" in item_name:
-                    item_type = "Report"
-                    display_name = item_name.replace(".Report", "")
-                elif ".SemanticModel" in item_name:
-                    item_type = "SemanticModel"
-                    display_name = item_name.replace(".SemanticModel", "")
-                elif ".Notebook" in item_name:
-                    item_type = "Notebook"
-                    display_name = item_name.replace(".Notebook", "")
-                elif ".Pipeline" in item_name:
-                    item_type = "Pipeline"
-                    display_name = item_name.replace(".Pipeline", "")
-                
-                if item_type:
-                    item_obj = {
-                        "id": item_name,  # Use folder name as ID reference
-                        "displayName": display_name,
-                        "type": item_type,
-                        "path": item_path
-                    }
-                    items.append(item_obj)
-                    logger.info(f"  Found {item_type}: {display_name}")
-            
-            logger.info(f"✓ Retrieved {len(items)} items from GitHub repository")
-            return items
-            
-        except Exception as e:
-            logger.error(f"✗ Failed to retrieve items from GitHub: {str(e)}")
-            return None
-    
     def copy_item(self,
                   source_workspace_id: str,
                   source_item_id: str,
@@ -356,104 +286,6 @@ class FabricDeploymentManager:
             if hasattr(e.response, 'text'):
                 logger.error(f"Response: {e.response.text}")
             return None
-    
-    def deploy_item_from_path(self,
-                             item_path: str,
-                             item_type: str,
-                             item_name: str,
-                             target_workspace_id: str) -> bool:
-        """
-        Deploy a Fabric item from local file system path to workspace.
-        
-        Args:
-            item_path: Local path to the item folder
-            item_type: Type of item (Dataflow, Lakehouse, Report, SemanticModel, etc.)
-            item_name: Display name of the item
-            target_workspace_id: Target workspace ID
-            
-        Returns:
-            bool: True if deployment successful, False otherwise
-        """
-        try:
-            logger.info(f"Deploying {item_type} '{item_name}' to workspace {target_workspace_id}")
-            
-            # Create a temporary .pbix or appropriate format from the item folder
-            # For now, we'll log the deployment and return success as the items will be
-            # handled by the Fabric CI/CD pipeline
-            logger.info(f"✓ {item_type} '{item_name}' prepared for deployment from {item_path}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"✗ Failed to deploy {item_type} '{item_name}': {str(e)}")
-            return False
-    
-    def deploy_items_from_github(self, 
-                                 github_repo_path: str,
-                                 target_workspace_id: str,
-                                 item_types: Optional[List[str]] = None) -> Dict:
-        """
-        Deploy items from GitHub repository to target Fabric workspace.
-        
-        Args:
-            github_repo_path: Local path to GitHub repository
-            target_workspace_id: ID of target Prod workspace
-            item_types: Specific item types to deploy (e.g., ['Report', 'SemanticModel'])
-                       If None, deploys all items
-            
-        Returns:
-            Dict: Deployment summary with success/failure counts
-        """
-        logger.info(f"Starting item deployment from GitHub repository to {target_workspace_id}")
-        
-        items = self.get_items_from_github(github_repo_path)
-        if not items:
-            logger.warning("No items found to deploy from GitHub repository")
-            return {"success": 0, "failed": 0, "skipped": 0}
-        
-        summary = {"success": 0, "failed": 0, "skipped": 0, "items": []}
-        
-        for item in items:
-            item_id = item.get("id")
-            item_type = item.get("type")
-            item_name = item.get("displayName")
-            item_path = item.get("path")
-            
-            # Filter by item type if specified
-            if item_types and item_type not in item_types:
-                logger.info(f"⊘ Skipping {item_type}: {item_name} (not in deployment list)")
-                summary["skipped"] += 1
-                continue
-            
-            logger.info(f"→ Deploying {item_type}: {item_name} from GitHub")
-            logger.info(f"  Source path: {item_path}")
-            
-            # Deploy item from GitHub repository
-            result = self.deploy_item_from_path(
-                item_path,
-                item_type,
-                item_name,
-                target_workspace_id
-            )
-            
-            if result:
-                summary["success"] += 1
-                summary["items"].append({
-                    "name": item_name,
-                    "type": item_type,
-                    "status": "deployed",
-                    "source": "GitHub",
-                    "path": item_path
-                })
-            else:
-                summary["failed"] += 1
-                summary["items"].append({
-                    "name": item_name,
-                    "type": item_type,
-                    "status": "failed",
-                    "source": "GitHub"
-                })
-        
-        return summary
     
     def deploy_items(self, 
                     source_workspace_id: str,
@@ -536,9 +368,7 @@ def load_config_from_env() -> Dict[str, str]:
         "prod_workspace_name": os.getenv("PROD_WORKSPACE_NAME", "Prod"),
         "dev_workspace_id": os.getenv("DEV_WORKSPACE_ID", ""),
         "prod_workspace_id": os.getenv("PROD_WORKSPACE_ID", ""),
-        "skip_role_assignment": os.getenv("SKIP_ROLE_ASSIGNMENT", "false").lower() == "true",
-        "github_repo_path": os.getenv("GITHUB_REPO_PATH", ""),
-        "use_github_source": os.getenv("USE_GITHUB_SOURCE", "false").lower() == "true"
+        "skip_role_assignment": os.getenv("SKIP_ROLE_ASSIGNMENT", "false").lower() == "true"
     }
     
     # Validate required fields
@@ -606,41 +436,26 @@ def main():
         logger.info("STEP 3: Deploying Items from Dev to Prod")
         logger.info("="*60)
         
-        # Check if we should use GitHub repository as source
-        if config["use_github_source"] or config["github_repo_path"]:
-            # Deploy from GitHub repository
-            github_path = config["github_repo_path"]
-            if not github_path:
-                github_path = os.getcwd()  # Use current directory if not specified
-            
-            logger.info(f"Using GitHub repository as source: {github_path}")
-            
-            deployment_summary = manager.deploy_items_from_github(
-                github_repo_path=github_path,
-                target_workspace_id=prod_workspace_id
-            )
+        # Use provided workspace ID if available, otherwise try to find workspace
+        if config["dev_workspace_id"]:
+            logger.info(f"Using provided Dev workspace ID: {config['dev_workspace_id']}")
+            dev_workspace_id = config["dev_workspace_id"]
         else:
-            # Deploy from Fabric workspace (original behavior)
-            # Use provided workspace ID if available, otherwise try to find workspace
-            if config["dev_workspace_id"]:
-                logger.info(f"Using provided Dev workspace ID: {config['dev_workspace_id']}")
-                dev_workspace_id = config["dev_workspace_id"]
-            else:
-                # Get Dev workspace
-                dev_workspace = manager._get_workspace_by_name(config["dev_workspace_name"])
-                if not dev_workspace:
-                    logger.error(f"Dev workspace '{config['dev_workspace_name']}' not found")
-                    return
-                
-                dev_workspace_id = dev_workspace.get("id")
-                logger.info(f"Found Dev workspace (ID: {dev_workspace_id})")
+            # Get Dev workspace
+            dev_workspace = manager._get_workspace_by_name(config["dev_workspace_name"])
+            if not dev_workspace:
+                logger.error(f"Dev workspace '{config['dev_workspace_name']}' not found")
+                return
             
-            # Deploy items (you can specify item_types to filter)
-            # Example: item_types=["Report", "SemanticModel"]
-            deployment_summary = manager.deploy_items(
-                source_workspace_id=dev_workspace_id,
-                target_workspace_id=prod_workspace_id
-            )
+            dev_workspace_id = dev_workspace.get("id")
+            logger.info(f"Found Dev workspace (ID: {dev_workspace_id})")
+        
+        # Deploy items (you can specify item_types to filter)
+        # Example: item_types=["Report", "SemanticModel"]
+        deployment_summary = manager.deploy_items(
+            source_workspace_id=dev_workspace_id,
+            target_workspace_id=prod_workspace_id
+        )
         
         # Step 4: Print deployment summary
         logger.info("\n" + "="*60)

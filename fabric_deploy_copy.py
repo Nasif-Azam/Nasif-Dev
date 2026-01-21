@@ -43,8 +43,11 @@ from dotenv import load_dotenv
 from azure.identity import ClientSecretCredential
 import requests
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file (optional)
+# GitHub Actions: .env doesn't exist, uses secrets instead
+# Local execution: .env file should exist with configuration
+if os.path.exists('.env'):
+    load_dotenv(dotenv_path='.env', override=False)
 
 
 class Logger:
@@ -152,10 +155,19 @@ class FabricDeploymentManager:
         """Load and validate configuration from environment variables"""
         Logger.info("Loading configuration from environment variables...")
         
-        self.tenant_id = os.getenv('TENANT_ID_ENV')
-        self.client_id = os.getenv('CLIENT_ID_ENV')
-        self.client_secret = os.getenv('CLIENT_SECRET_ENV')
-        self.capacity_id = os.getenv('CAPACITY_ID_ENV')
+        # Try to load from .env file first (for local development)
+        if os.path.exists('.env'):
+            Logger.info("Found .env file, loading configuration...")
+            load_dotenv(dotenv_path='.env', override=False)
+        else:
+            Logger.info("No .env file found, using environment variables directly...")
+        
+        # Load all configuration variables
+        # GitHub Actions passes these via secrets in the workflow
+        self.tenant_id = os.getenv('TENANT_ID_ENV') or os.getenv('TENANT_ID')
+        self.client_id = os.getenv('CLIENT_ID_ENV') or os.getenv('CLIENT_ID')
+        self.client_secret = os.getenv('CLIENT_SECRET_ENV') or os.getenv('CLIENT_SECRET')
+        self.capacity_id = os.getenv('CAPACITY_ID_ENV') or os.getenv('CAPACITY_ID')
         
         self.dev_workspace_name = os.getenv('DEV_WORKSPACE_NAME', 'Nasif-Dev')
         self.prod_workspace_name = os.getenv('PROD_WORKSPACE_NAME', 'Nasif-Prod')
@@ -168,6 +180,14 @@ class FabricDeploymentManager:
         
         # API endpoint
         self.fabric_api_url = "https://api.fabric.microsoft.com/v1"
+        
+        # Debug: Log which variables are set (without printing secrets)
+        Logger.info(f"TENANT_ID: {'SET' if self.tenant_id else 'NOT SET'}")
+        Logger.info(f"CLIENT_ID: {'SET' if self.client_id else 'NOT SET'}")
+        Logger.info(f"CLIENT_SECRET: {'SET' if self.client_secret else 'NOT SET'}")
+        Logger.info(f"CAPACITY_ID: {'SET' if self.capacity_id else 'NOT SET'}")
+        Logger.info(f"DEV_WORKSPACE_ID: {'SET' if self.dev_workspace_id else 'NOT SET'}")
+        Logger.info(f"PROD_WORKSPACE_ID: {'SET' if self.prod_workspace_id else 'NOT SET'}")
         
         # Validate required variables
         required_vars = {
@@ -182,6 +202,8 @@ class FabricDeploymentManager:
         missing = [k for k, v in required_vars.items() if not v]
         if missing:
             Logger.error(f"Missing required environment variables: {missing}")
+            Logger.error("GitHub Actions: Ensure all secrets are added to your repository")
+            Logger.error("Local execution: Ensure .env file exists with all required variables")
             raise ValueError(f"Missing configuration: {missing}")
         
         Logger.success("Configuration loaded and validated")

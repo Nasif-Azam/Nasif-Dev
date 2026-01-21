@@ -8,6 +8,7 @@ import time
 from dotenv import load_dotenv
 import shutil
 from pathlib import Path
+import subprocess
 
 # Load environment variables from .env file
 load_dotenv()
@@ -249,74 +250,96 @@ class FabricDeploymentManager:
             logger.error(f"✗ Failed to retrieve workspace items: {str(e)}")
             return None
     
-    def get_items_from_github(self, github_repo_path: str, branch: str = "Dev-Branch") -> Optional[List[Dict]]:
+    def _get_item_type(self, item_name: str) -> Optional[str]:
         """
-        Retrieve Fabric items from GitHub repository structure.
+        Detect item type from folder name suffix.
         
         Args:
-            github_repo_path: Local path to the GitHub repository
-            branch: Git branch name (for reference)
+            item_name: Name of the item folder
+            
+        Returns:
+            str: Item type (Dataflow, Report, SemanticModel, etc.) or None
+        """
+        if ".Dataflow" in item_name:
+            return "Dataflow"
+        elif ".Lakehouse" in item_name:
+            return "Lakehouse"
+        elif ".Report" in item_name:
+            return "Report"
+        elif ".SemanticModel" in item_name:
+            return "SemanticModel"
+        elif ".Notebook" in item_name:
+            return "Notebook"
+        elif ".Pipeline" in item_name:
+            return "Pipeline"
+        return None
+    
+    def get_items_from_github(self, repo_url: str = "https://github.com/Nasif-Azam/Nasif-Dev", branch: str = "Dev-Branch", dev_folder: str = "Development") -> Optional[List[Dict]]:
+        """
+        Clone repository from GitHub and get items from Development folder.
+        
+        Args:
+            repo_url: GitHub repository URL
+            branch: Git branch name to clone
+            dev_folder: Development folder name
             
         Returns:
             List: List of items found in the repository
         """
-        logger.info(f"Retrieving items from GitHub repository: {github_repo_path}")
-        
-        items = []
-        # development_path = os.path.join(github_repo_path, "Development")
-        development_path = os.path.join(github_repo_path, "Development")
-        
-        if not os.path.exists(development_path):
-            logger.error(f"[X] Development folder not found at {development_path}")
-            return None
-        
         try:
-            # Scan the Development folder for Fabric items
-            for item_name in os.listdir(development_path):
-                item_path = os.path.join(development_path, item_name)
-                
-                if not os.path.isdir(item_path):
-                    continue
-                
-                # Identify item type based on folder name pattern
-                item_type = None
-                display_name = None
-                
-                if ".Dataflow" in item_name:
-                    item_type = "Dataflow"
-                    display_name = item_name.replace(".Dataflow", "")
-                elif ".Lakehouse" in item_name:
-                    item_type = "Lakehouse"
-                    display_name = item_name.replace(".Lakehouse", "")
-                elif ".Report" in item_name:
-                    item_type = "Report"
-                    display_name = item_name.replace(".Report", "")
-                elif ".SemanticModel" in item_name:
-                    item_type = "SemanticModel"
-                    display_name = item_name.replace(".SemanticModel", "")
-                elif ".Notebook" in item_name:
-                    item_type = "Notebook"
-                    display_name = item_name.replace(".Notebook", "")
-                elif ".Pipeline" in item_name:
-                    item_type = "Pipeline"
-                    display_name = item_name.replace(".Pipeline", "")
-                
-                if item_type:
-                    item_obj = {
-                        "id": item_name,  # Use folder name as ID reference
-                        "displayName": display_name,
-                        "type": item_type,
-                        "path": item_path
-                    }
-                    items.append(item_obj)
-                    logger.info(f"  Found {item_type}: {display_name}")
+            # Create temporary directory for cloning
+            temp_repo_dir = "temp_fabric_repo"
             
-            logger.info(f"✓ Retrieved {len(items)} items from GitHub repository")
+            # Remove existing temp directory if it exists
+            if os.path.exists(temp_repo_dir):
+                logger.info("Removing existing temp directory...")
+                time.sleep(1)  # Wait for git process to release files
+                try:
+                    shutil.rmtree(temp_repo_dir)
+                except PermissionError:
+                    logger.warning("Could not remove temp directory, continuing anyway...")
+            
+            # Clone the repository
+            logger.info(f"Cloning repository from {repo_url} (branch: {branch})...")
+            result = subprocess.run(
+                ["git", "clone", "--branch", branch, repo_url, temp_repo_dir],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            time.sleep(1)  # Wait for git to release resources
+            logger.info("✓ Repository cloned successfully")
+            
+            # Get items from Development folder
+            dev_path = os.path.join(temp_repo_dir, dev_folder)
+            if not os.path.exists(dev_path):
+                logger.error(f"Development folder not found at {dev_path}")
+                return []
+            
+            items = []
+            for item_name in os.listdir(dev_path):
+                item_path = os.path.join(dev_path, item_name)
+                if os.path.isdir(item_path):
+                    # Detect item type by folder name suffix
+                    item_type = self._get_item_type(item_name)
+                    if item_type:
+                        items.append({
+                            "displayName": item_name.split('.')[0],  # Remove the .Type suffix for display
+                            "fullName": item_name,
+                            "path": item_path,
+                            "type": item_type
+                        })
+                        logger.info(f"Found item: {item_name} (type: {item_type})")
+            
+            logger.info(f"✓ Retrieved {len(items)} items from GitHub Development folder")
             return items
             
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Git clone failed: {e}")
+            return []
         except Exception as e:
-            logger.error(f"[X] Failed to retrieve items from GitHub: {str(e)}")
-            return None
+            logger.error(f"Error in get_items_from_github: {e}")
+            return []
     
     def copy_item(self,
                   source_workspace_id: str,
@@ -389,14 +412,16 @@ class FabricDeploymentManager:
             return False
     
     def deploy_items_from_github(self, 
-                                 github_repo_path: str,
-                                 target_workspace_id: str,
+                                 repo_url: str = "https://github.com/Nasif-Azam/Nasif-Dev",
+                                 branch: str = "Dev-Branch",
+                                 target_workspace_id: str = None,
                                  item_types: Optional[List[str]] = None) -> Dict:
         """
         Deploy items from GitHub repository to target Fabric workspace.
         
         Args:
-            github_repo_path: Local path to GitHub repository
+            repo_url: GitHub repository URL
+            branch: Git branch to clone
             target_workspace_id: ID of target Prod workspace
             item_types: Specific item types to deploy (e.g., ['Report', 'SemanticModel'])
                        If None, deploys all items
@@ -406,7 +431,7 @@ class FabricDeploymentManager:
         """
         logger.info(f"Starting item deployment from GitHub repository to {target_workspace_id}")
         
-        items = self.get_items_from_github(github_repo_path)
+        items = self.get_items_from_github(repo_url=repo_url, branch=branch)
         if not items:
             logger.warning("No items found to deploy from GitHub repository")
             return {"success": 0, "failed": 0, "skipped": 0}
@@ -414,9 +439,9 @@ class FabricDeploymentManager:
         summary = {"success": 0, "failed": 0, "skipped": 0, "items": []}
         
         for item in items:
-            item_id = item.get("id")
             item_type = item.get("type")
             item_name = item.get("displayName")
+            full_name = item.get("fullName")
             item_path = item.get("path")
             
             # Filter by item type if specified
@@ -440,6 +465,7 @@ class FabricDeploymentManager:
                 summary["success"] += 1
                 summary["items"].append({
                     "name": item_name,
+                    "fullName": full_name,
                     "type": item_type,
                     "status": "deployed",
                     "source": "GitHub",
@@ -449,6 +475,7 @@ class FabricDeploymentManager:
                 summary["failed"] += 1
                 summary["items"].append({
                     "name": item_name,
+                    "fullName": full_name,
                     "type": item_type,
                     "status": "failed",
                     "source": "GitHub"
@@ -604,16 +631,10 @@ def main():
         logger.info("STEP 3: Deploying Items from GitHub to Prod")
         logger.info("="*60)
         
-        # Get GitHub repository path
-        github_path = config["github_repo_path"]
-        if not github_path:
-            github_path = os.getcwd()  # Use current directory if not specified
-        
-        logger.info(f"Using GitHub repository as source: {github_path}")
-        
         # Deploy items from GitHub repository
         deployment_summary = manager.deploy_items_from_github(
-            github_repo_path=github_path,
+            repo_url="https://github.com/Nasif-Azam/Nasif-Dev",
+            branch="Dev-Branch",
             target_workspace_id=prod_workspace_id
         )
         

@@ -719,34 +719,15 @@ def main():
                 return
             prod_workspace_id = prod_workspace.get("id")
         
-        # Step 2: Assign roles to Service Principal (REQUIRED for deployment to work)
+        # Step 2: Assign roles to Service Principal (Optional - assign manually in Fabric UI)
         logger.info("\n" + "="*60)
-        logger.info("STEP 2: Assigning Roles to Service Principal")
+        logger.info("STEP 2: Checking Prod Workspace Access")
         logger.info("="*60)
         
-        if config["skip_role_assignment"]:
-            logger.warning("⊘ Role assignment skipped - ensure Service Principal has Admin role manually!")
-            logger.warning("   If you see 401 errors during deployment, assign Admin role to the Service Principal in Fabric workspace")
-        else:
-            logger.info(f"Assigning Admin role to Service Principal: {config['client_id']}")
-            # Assign Admin role to the service principal
-            role_assigned = manager.assign_role_to_user(
-                workspace_id=prod_workspace_id,
-                user_principal=config["client_id"],
-                role="Admin"
-            )
-            if not role_assigned:
-                logger.error("✗ Role assignment failed - Service Principal may not have sufficient permissions")
-                logger.error("  Please ensure:")
-                logger.error("  1. Service Principal exists in your Azure AD")
-                logger.error("  2. You have permissions to assign roles in the workspace")
-                logger.error("  3. Try setting SKIP_ROLE_ASSIGNMENT=true if role assignment is not needed")
-                # Continue anyway - role might already be assigned
-            else:
-                logger.info("✓ Role assignment successful")
-            
-            # Wait a moment for role assignment to take effect
-            time.sleep(2)
+        logger.info(f"Target Prod workspace ID: {prod_workspace_id}")
+        logger.info("NOTE: Ensure your Service Principal has Admin role in the Prod workspace")
+        logger.info("      You can assign this role manually in Fabric workspace settings")
+        logger.info("      OR ensure the service principal is already assigned the Admin role")
         
         # Step 3: Deploy items from GitHub repository to Prod workspace
         logger.info("\n" + "="*60)

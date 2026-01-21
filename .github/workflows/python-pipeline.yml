@@ -27,4 +27,4 @@ jobs:
         pip install -r requirements.txt  # Ensure requirements.txt is in the root directory
 
     - name: Run Python script
-      run: python Test_copy_2.py  # Replace with your Python script name
+      run: python FabricDeploymentManager.py  # Replace with your Python script name

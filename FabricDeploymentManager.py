@@ -186,42 +186,96 @@ class FabricDeploymentManager:
             logger.error(f"✗ Failed to retrieve workspaces: {str(e)}")
             return None
     
-    def assign_role_to_user(self, 
-                           workspace_id: str,
-                           user_principal: str,
-                           role: str = "Admin") -> bool:
+    def get_role_assignments(self, workspace_id: str) -> List[Dict]:
         """
-        Assign a role to a user/service principal in the workspace.
+        Retrieve all existing role assignments in a workspace.
         
         Args:
             workspace_id: ID of the target workspace
-            user_principal: User principal name or service principal ID
-            role: Role to assign (Admin, Member, Contributor, Viewer)
             
         Returns:
-            bool: True if assignment successful, False otherwise
+            List: List of existing role assignments
         """
-        logger.info(f"Assigning {role} role to {user_principal} in workspace {workspace_id}")
-        
         url = f"{self.fabric_api_base}/workspaces/{workspace_id}/roleAssignments"
         
-        payload = {
-            "principalId": user_principal,
-            "principalType": "ServicePrincipal",
-            "role": role
-        }
-        
         try:
-            response = requests.post(url, json=payload, headers=self._get_headers())
+            response = requests.get(url, headers=self._get_headers(), timeout=10)
             response.raise_for_status()
             
-            logger.info(f"✓ Successfully assigned {role} role to {user_principal}")
-            return True
+            assignments = response.json().get("value", [])
+            logger.info(f"✓ Retrieved {len(assignments)} existing role assignments")
+            return assignments
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"✗ Failed to assign role: {str(e)}")
-            if hasattr(e.response, 'text'):
-                logger.error(f"Response: {e.response.text}")
+            logger.error(f"✗ Failed to retrieve role assignments: {str(e)}")
+            return []
+    
+    def assign_role_to_user(self, 
+                           workspace_id: str,
+                           user_principal: str,
+                           role: str = "Admin",
+                           principal_type: str = "ServicePrincipal") -> bool:
+        """
+        Assign a role to a user/service principal in the workspace.
+        Checks existing assignments to avoid duplicate assignment.
+        
+        Args:
+            workspace_id: ID of the target workspace
+            user_principal: User principal ID or service principal ID
+            role: Role to assign (Admin, Member, Contributor, Viewer)
+            principal_type: Type of principal (User, ServicePrincipal, Group)
+            
+        Returns:
+            bool: True if assignment successful or already exists, False otherwise
+        """
+        try:
+            logger.info(f"Checking role assignment for {user_principal} ({principal_type})")
+            
+            # Get existing role assignments
+            existing_assignments = self.get_role_assignments(workspace_id)
+            
+            # Create set of existing (principal_id, role) tuples
+            existing = {(ra.get("principal", {}).get("id"), ra.get("role")) 
+                       for ra in existing_assignments}
+            
+            # Check if already assigned
+            if (user_principal, role) in existing:
+                logger.info(f"✓ {user_principal} already has {role} role")
+                return True
+            
+            # Assign the role
+            logger.info(f"Assigning {role} role to {user_principal}")
+            
+            url = f"{self.fabric_api_base}/workspaces/{workspace_id}/roleAssignments"
+            
+            payload = {
+                "principal": {
+                    "id": user_principal,
+                    "type": principal_type
+                },
+                "role": role
+            }
+            
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=10)
+            
+            if response.status_code in [200, 201]:
+                logger.info(f"✓ Successfully assigned {role} role to {user_principal}")
+                return True
+            else:
+                logger.error(f"✗ Failed to assign role: {response.status_code}")
+                if response.text:
+                    logger.error(f"  Response: {response.text}")
+                return False
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"✗ Request failed during role assignment: {str(e)}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"  Status: {e.response.status_code}")
+                if e.response.text:
+                    logger.error(f"  Response: {e.response.text}")
+            return False
+        except Exception as e:
+            logger.error(f"✗ Error in assign_role_to_user: {str(e)}")
             return False
     
     def get_workspace_items(self, workspace_id: str) -> Optional[List[Dict]]:

@@ -263,7 +263,8 @@ class FabricDeploymentManager:
         logger.info(f"Retrieving items from GitHub repository: {github_repo_path}")
         
         items = []
-        development_path = os.path.join(github_repo_path, "Development")
+        # development_path = os.path.join(github_repo_path, "Development")
+        development_path = os.path.join(github_repo_path)
         
         if not os.path.exists(development_path):
             logger.error(f"[X] Development folder not found at {development_path}")

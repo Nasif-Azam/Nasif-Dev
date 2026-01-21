@@ -1,0 +1,104 @@
+name: Fabric Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:  # Allow manual trigger from Actions tab
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+    
+    steps:
+    # ================================================================
+    # Step 1: Checkout Repository
+    # ================================================================
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    # ================================================================
+    # Step 2: Setup Python
+    # ================================================================
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+
+    # ================================================================
+    # Step 3: Install Git (Windows runners may need explicit setup)
+    # ================================================================
+    - name: Verify Git installation
+      run: |
+        git --version
+        Write-Host "Git is available"
+
+    # ================================================================
+    # Step 4: Upgrade pip and install dependencies
+    # ================================================================
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        Write-Host "Dependencies installed successfully"
+
+    # ================================================================
+    # Step 5: Run Fabric Deployment Script
+    # ================================================================
+    - name: Deploy to Fabric
+      env:
+        # Azure Service Principal
+        TENANT_ID_ENV: ${{ secrets.TENANT_ID_ENV }}
+        CLIENT_ID_ENV: ${{ secrets.CLIENT_ID_ENV }}
+        CLIENT_SECRET_ENV: ${{ secrets.CLIENT_SECRET_ENV }}
+        CAPACITY_ID_ENV: ${{ secrets.CAPACITY_ID_ENV }}
+        
+        # Workspace IDs
+        DEV_WORKSPACE_ID: ${{ secrets.DEV_WORKSPACE_ID }}
+        PROD_WORKSPACE_ID: ${{ secrets.PROD_WORKSPACE_ID }}
+        
+        # Workspace Names
+        DEV_WORKSPACE_NAME: Nasif-Dev
+        PROD_WORKSPACE_NAME: Nasif-Prod
+        
+        # GitHub Configuration
+        GITHUB_REPO_PATH: https://github.com/Nasif-Azam/Nasif-Dev
+        GITHUB_BRANCH: Dev-Branch
+        
+        # Options
+        SKIP_ROLE_ASSIGNMENT: 'false'
+      run: python fabric_deploy.py
+
+    # ================================================================
+    # Step 6: Upload Deployment Report as Artifact
+    # ================================================================
+    - name: Upload deployment report
+      if: always()  # Run even if previous steps fail
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-report
+        path: deployment_report.json
+        retention-days: 30
+
+    # ================================================================
+    # Step 7: Post Deployment Status
+    # ================================================================
+    - name: Deployment Status
+      if: success()
+      run: |
+        Write-Host "✓ Deployment completed successfully!" -ForegroundColor Green
+        Write-Host "Check the deployment_report.json artifact for details"
+
+    - name: Deployment Failed
+      if: failure()
+      run: |
+        Write-Host "✗ Deployment failed. Please review the logs above." -ForegroundColor Red
+        exit 1

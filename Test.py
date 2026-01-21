@@ -47,6 +47,41 @@ class FabricDeploymentManager:
             "Content-Type": "application/json"
         }
     
+    def create_workspace(self, workspace_name, workspace_id=None):
+        """Create workspace if it doesn't exist"""
+        try:
+            if workspace_id:
+                url = f"{self.fabric_api_url}/workspaces/{workspace_id}"
+                response = requests.get(url, headers=self.get_headers())
+                
+                if response.status_code == 200:
+                    print(f"[OK] Workspace '{workspace_name}' exists")
+                    return response.json()
+            
+            payload = {
+                "displayName": workspace_name,
+                "capacityId": self.capacity_id
+            }
+            response = requests.post(
+                f"{self.fabric_api_url}/workspaces",
+                headers=self.get_headers(),
+                json=payload
+            )
+            
+            if response.status_code in [200, 201]:
+                workspace = response.json()
+                print(f"[OK] Workspace created successfully")
+                return workspace
+            elif response.status_code == 409:
+                print(f"[OK] Workspace already exists (409)")
+                return {"id": workspace_id} if workspace_id else None
+            else:
+                print(f"[ERROR] Workspace creation failed: {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"[ERROR] Workspace error: {e}")
+            raise
+    
     def verify_service_principal_access(self):
         """Verify SP can access Fabric API"""
         try:
@@ -86,7 +121,6 @@ class FabricDeploymentManager:
     def assign_role_to_workspace(self, workspace_id, principal_id, 
                                 principal_type="ServicePrincipal", role="Admin"):
         """
-        Assign role with improved 403 handling.
         If assignment fails due to insufficient privileges, continue
         (assume manual assignment was done in Azure Portal).
         """
@@ -132,41 +166,6 @@ class FabricDeploymentManager:
         except Exception as e:
             print(f"[ERROR] Role assignment error: {e}")
             return False
-    
-    def create_workspace(self, workspace_name, workspace_id=None):
-        """Create workspace if it doesn't exist"""
-        try:
-            if workspace_id:
-                url = f"{self.fabric_api_url}/workspaces/{workspace_id}"
-                response = requests.get(url, headers=self.get_headers())
-                
-                if response.status_code == 200:
-                    print(f"[OK] Workspace '{workspace_name}' exists")
-                    return response.json()
-            
-            payload = {
-                "displayName": workspace_name,
-                "capacityId": self.capacity_id
-            }
-            response = requests.post(
-                f"{self.fabric_api_url}/workspaces",
-                headers=self.get_headers(),
-                json=payload
-            )
-            
-            if response.status_code in [200, 201]:
-                workspace = response.json()
-                print(f"[OK] Workspace created successfully")
-                return workspace
-            elif response.status_code == 409:
-                print(f"[OK] Workspace already exists (409)")
-                return {"id": workspace_id} if workspace_id else None
-            else:
-                print(f"[ERROR] Workspace creation failed: {response.status_code}")
-                return None
-        except Exception as e:
-            print(f"[ERROR] Workspace error: {e}")
-            raise
     
     def get_items_from_github(self, repo_url="https://github.com/Nasif-Azam/Nasif-Dev", 
                              branch="Dev-Branch"):

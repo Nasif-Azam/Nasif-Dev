@@ -10,16 +10,16 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest  # Use windows-latest for Windows-based runners
-    
+    runs-on: windows-latest 
+
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2  # Checks out the code from your repository
+      uses: actions/checkout@v2  
 
     - name: Set up Python 3.x
       uses: actions/setup-python@v2
       with:
-        python-version: '3.x'  # Specify the Python version you want to use
+        python-version: '3.x' 
 
     - name: Install dependencies
       run: |
@@ -27,4 +27,4 @@ jobs:
         pip install -r requirements.txt  # Ensure requirements.txt is in the root directory
 
     - name: Run Python script
-      run: python FabricDeploymentManager.py  # Replace with your Python script name
+      run: python FabricDeploymentManager.py  

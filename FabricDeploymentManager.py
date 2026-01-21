@@ -532,13 +532,10 @@ def load_config_from_env() -> Dict[str, str]:
         "client_id": os.getenv("CLIENT_ID_ENV"),
         "client_secret": os.getenv("CLIENT_SECRET_ENV"),
         "capacity_id": os.getenv("CAPACITY_ID_ENV"),
-        "dev_workspace_name": os.getenv("DEV_WORKSPACE_NAME", "Dev"),
         "prod_workspace_name": os.getenv("PROD_WORKSPACE_NAME", "Prod"),
-        "dev_workspace_id": os.getenv("DEV_WORKSPACE_ID", ""),
         "prod_workspace_id": os.getenv("PROD_WORKSPACE_ID", ""),
         "skip_role_assignment": os.getenv("SKIP_ROLE_ASSIGNMENT", "false").lower() == "true",
-        "github_repo_path": os.getenv("GITHUB_REPO_PATH", ""),
-        "use_github_source": os.getenv("USE_GITHUB_SOURCE", "false").lower() == "true"
+        "github_repo_path": os.getenv("GITHUB_REPO_PATH", "")
     }
     
     # Validate required fields
@@ -601,46 +598,23 @@ def main():
             if not role_assigned:
                 logger.warning("Role assignment failed. Continuing with deployment...")
         
-        # Step 3: Get Dev workspace and deploy items
+        # Step 3: Deploy items from GitHub repository to Prod workspace
         logger.info("\n" + "="*60)
-        logger.info("STEP 3: Deploying Items from Dev to Prod")
+        logger.info("STEP 3: Deploying Items from GitHub to Prod")
         logger.info("="*60)
         
-        # Check if we should use GitHub repository as source
-        if config["use_github_source"] or config["github_repo_path"]:
-            # Deploy from GitHub repository
-            github_path = config["github_repo_path"]
-            if not github_path:
-                github_path = os.getcwd()  # Use current directory if not specified
-            
-            logger.info(f"Using GitHub repository as source: {github_path}")
-            
-            deployment_summary = manager.deploy_items_from_github(
-                github_repo_path=github_path,
-                target_workspace_id=prod_workspace_id
-            )
-        else:
-            # Deploy from Fabric workspace (original behavior)
-            # Use provided workspace ID if available, otherwise try to find workspace
-            if config["dev_workspace_id"]:
-                logger.info(f"Using provided Dev workspace ID: {config['dev_workspace_id']}")
-                dev_workspace_id = config["dev_workspace_id"]
-            else:
-                # Get Dev workspace
-                dev_workspace = manager._get_workspace_by_name(config["dev_workspace_name"])
-                if not dev_workspace:
-                    logger.error(f"Dev workspace '{config['dev_workspace_name']}' not found")
-                    return
-                
-                dev_workspace_id = dev_workspace.get("id")
-                logger.info(f"Found Dev workspace (ID: {dev_workspace_id})")
-            
-            # Deploy items (you can specify item_types to filter)
-            # Example: item_types=["Report", "SemanticModel"]
-            deployment_summary = manager.deploy_items(
-                source_workspace_id=dev_workspace_id,
-                target_workspace_id=prod_workspace_id
-            )
+        # Get GitHub repository path
+        github_path = config["github_repo_path"]
+        if not github_path:
+            github_path = os.getcwd()  # Use current directory if not specified
+        
+        logger.info(f"Using GitHub repository as source: {github_path}")
+        
+        # Deploy items from GitHub repository
+        deployment_summary = manager.deploy_items_from_github(
+            github_repo_path=github_path,
+            target_workspace_id=prod_workspace_id
+        )
         
         # Step 4: Print deployment summary
         logger.info("\n" + "="*60)

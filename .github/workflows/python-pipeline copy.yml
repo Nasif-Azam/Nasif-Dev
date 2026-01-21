@@ -75,7 +75,7 @@ jobs:
 
           # Options
           SKIP_ROLE_ASSIGNMENT: "false"
-        run: python fabric_deploy.py
+        run: python fabric_deploy_copy.py
 
       # ================================================================
       # Step 6: Upload Deployment Report as Artifact

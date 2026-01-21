@@ -403,46 +403,48 @@ class FabricDeploymentManager:
             
             url = f"{self.fabric_api_base}/workspaces/{target_workspace_id}/items"
             
-            # Create payload with just basic metadata (no definition)
-            # Fabric API will create the item, definitions can be updated separately
+            # Prepare payload based on item type
             payload = {
                 "displayName": item_name,
                 "type": item_type,
-                "description": f"Deployed from GitHub repository - {item_type}"
+                "description": f"Deployed from GitHub repository"
             }
             
-            logger.info(f"  Calling Fabric API: POST {url}")
-            logger.info(f"  Payload: displayName='{item_name}', type='{item_type}'")
+            # Add definition content for items that require it
+            if item_type == "Report":
+                definition_file = os.path.join(item_path, "definition.pbir")
+                if os.path.exists(definition_file):
+                    with open(definition_file, 'r', encoding='utf-8') as f:
+                        payload["definition"] = json.load(f)
+                    logger.info(f"  Using definition from {definition_file}")
+                else:
+                    logger.warning(f"  Definition file not found at {definition_file}, creating basic report")
+                    
+            elif item_type == "SemanticModel":
+                definition_file = os.path.join(item_path, "definition.pbism")
+                if os.path.exists(definition_file):
+                    with open(definition_file, 'r', encoding='utf-8') as f:
+                        payload["definition"] = json.load(f)
+                    logger.info(f"  Using definition from {definition_file}")
+                else:
+                    logger.warning(f"  Definition file not found at {definition_file}, creating basic model")
+                    
+            elif item_type == "Dataflow":
+                # For Dataflow, check for mashup.pq
+                mashup_file = os.path.join(item_path, "mashup.pq")
+                if os.path.exists(mashup_file):
+                    with open(mashup_file, 'r', encoding='utf-8') as f:
+                        payload["definition"] = f.read()
+                    logger.info(f"  Using mashup from {mashup_file}")
             
             # Call Fabric API to create item
-            response = requests.post(
-                url, 
-                json=payload, 
-                headers=self._get_headers(), 
-                timeout=30
-            )
+            logger.info(f"  Calling Fabric API: POST {url}")
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=30)
             
-            logger.info(f"  API Response Status: {response.status_code}")
-            
-            if response.status_code in [201, 200]:
+            if response.status_code == 201 or response.status_code == 200:
                 item_data = response.json()
                 item_id = item_data.get('id')
                 logger.info(f"✓ {item_type} '{item_name}' deployed successfully (ID: {item_id})")
-                
-                # Log definition files found
-                if item_type == "Report":
-                    definition_file = os.path.join(item_path, "definition.pbir")
-                    if os.path.exists(definition_file):
-                        logger.info(f"  Note: Definition file exists at {definition_file} - can be updated manually")
-                elif item_type == "SemanticModel":
-                    definition_file = os.path.join(item_path, "definition.pbism")
-                    if os.path.exists(definition_file):
-                        logger.info(f"  Note: Definition file exists at {definition_file} - can be updated manually")
-                elif item_type == "Dataflow":
-                    mashup_file = os.path.join(item_path, "mashup.pq")
-                    if os.path.exists(mashup_file):
-                        logger.info(f"  Note: Mashup file exists at {mashup_file} - can be updated manually")
-                
                 return True
             else:
                 logger.error(f"✗ API returned status code {response.status_code}")
@@ -454,13 +456,10 @@ class FabricDeploymentManager:
             logger.error(f"✗ Request failed to deploy {item_type} '{item_name}': {str(e)}")
             if hasattr(e, 'response') and e.response is not None:
                 logger.error(f"  Status: {e.response.status_code}")
-                if e.response.text:
-                    logger.error(f"  Response: {e.response.text}")
+                logger.error(f"  Response: {e.response.text}")
             return False
         except Exception as e:
             logger.error(f"✗ Failed to deploy {item_type} '{item_name}': {str(e)}")
-            import traceback
-            logger.error(f"  Traceback: {traceback.format_exc()}")
             return False
     
     def deploy_items_from_github(self, 

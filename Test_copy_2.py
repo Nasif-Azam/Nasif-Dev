@@ -95,18 +95,26 @@ class FabricDeploymentManager:
             print(f"[ERROR] Error in create_workspace: {e}")
             raise
     
-    def assign_role_to_workspace(self, workspace_id, principal_id, principal_type="App", role="Admin"):
-        """Assign role to Service Principal in workspace"""
+    def assign_role_to_workspace(self, workspace_id, principal_id, principal_type="ServicePrincipal", role="Admin"):
+        """
+        Assign role to Service Principal in workspace.
+        Note: principal_type options are 'User', 'Group', 'ServicePrincipal'
+        """
         if self.skip_role_assignment:
             print(f"[SKIP] Skipping role assignment (SKIP_ROLE_ASSIGNMENT=true)")
             return True
         
         try:
             url = f"{self.fabric_api_url}/workspaces/{workspace_id}/roleAssignments"
+            
+            # CRITICAL CHANGE: Fabric API uses 'ServicePrincipal' not 'App' for the type
+            # Also, ensure principal_id is the OBJECT ID of the Enterprise Application, 
+            # though usually the Client ID works for the 'principal' field in this specific API.
+            
             payload = {
                 "principal": {
                     "id": principal_id,
-                    "type": principal_type
+                    "type": principal_type 
                 },
                 "role": role
             }
@@ -120,14 +128,16 @@ class FabricDeploymentManager:
             if response.status_code in [200, 201]:
                 print(f"[OK] Role '{role}' assigned to workspace '{workspace_id}'")
                 return True
+            # Handle case where role already exists (sometimes returns 200, sometimes error depending on API version)
+            elif "AccessAlreadyExists" in response.text:
+                print(f"[OK] Role already exists for this principal.")
+                return True
             else:
                 print(f"[WARNING] Role assignment failed: {response.status_code} - {response.text}")
-                print(f"[INFO] Continuing deployment without role assignment...")
-                return True  # Don't block deployment
+                return False
         except Exception as e:
             print(f"[WARNING] Error in assign_role_to_workspace: {e}")
-            print(f"[INFO] Continuing deployment without role assignment...")
-            return True  # Don't block deployment
+            return False
     
     def get_items_from_github(self, repo_url="https://github.com/Nasif-Azam/Nasif-Dev", branch="Dev-Branch", dev_folder="Development"):
         """Clone repository from GitHub and get items from Development folder"""

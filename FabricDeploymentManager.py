@@ -266,7 +266,7 @@ class FabricDeploymentManager:
         development_path = os.path.join(github_repo_path, "Development")
         
         if not os.path.exists(development_path):
-            logger.error(f"✗ Development folder not found at {development_path}")
+            logger.error(f"[X] Development folder not found at {development_path}")
             return None
         
         try:
@@ -314,7 +314,7 @@ class FabricDeploymentManager:
             return items
             
         except Exception as e:
-            logger.error(f"✗ Failed to retrieve items from GitHub: {str(e)}")
+            logger.error(f"[X] Failed to retrieve items from GitHub: {str(e)}")
             return None
     
     def copy_item(self,

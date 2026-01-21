@@ -7,7 +7,6 @@ import time
 import shutil
 import subprocess
 from pathlib import Path
-import base64
 
 # filepath: c:\Users\NasifAzam\Documents\GitHub\Nasif-Dev\FabricDeploymentManager.py
 
@@ -225,76 +224,52 @@ class FabricDeploymentManager:
             item_name = item.get('displayName')
             item_path = item.get('path')
             
-            # 1. Determine the file path and the "logical path" expected by the API
-            # The 'logical_path' is what Fabric expects inside the definition object (e.g., 'model.bim' or 'notebook-content.py')
-            definition_file_path = None
-            logical_path = None
+            # For GitHub items, we need to upload the definition files
+            # Different item types have different structures
+            definition_file = None
             
             if item_type == 'Dataflow':
-                definition_file_path = os.path.join(item_path, 'mashup.pq')
-                logical_path = 'mashup.pq' # Standard for Dataflow Gen2
+                definition_file = os.path.join(item_path, 'mashup.pq')
             elif item_type == 'Lakehouse':
-                definition_file_path = os.path.join(item_path, 'lakehouse.metadata.json')
-                logical_path = 'lakehouse.metadata.json'
+                definition_file = os.path.join(item_path, 'lakehouse.metadata.json')
             elif item_type == 'Report':
-                definition_file_path = os.path.join(item_path, 'definition.pbir')
-                logical_path = 'definition.pbir' 
+                definition_file = os.path.join(item_path, 'definition.pbir')
             elif item_type == 'SemanticModel':
-                definition_file_path = os.path.join(item_path, 'definition.pbism')
-                logical_path = 'definition.pbism'
-            elif item_type == 'Notebook':
-                # Notebooks typically require the .ipynb file
-                definition_file_path = os.path.join(item_path, 'notebook-content.py') 
-                if not os.path.exists(definition_file_path):
-                     definition_file_path = os.path.join(item_path, f"{item_name}.ipynb")
-                logical_path = 'notebook-content.py'
-
-            if not definition_file_path or not os.path.exists(definition_file_path):
+                definition_file = os.path.join(item_path, 'definition.pbism')
+            
+            if not definition_file or not os.path.exists(definition_file):
                 print(f"[WARNING] Definition file not found for '{item_name}', skipping...")
                 return False
             
-            # 2. Read and Base64 encode the content
-            with open(definition_file_path, 'rb') as f:
-                content_bytes = f.read()
-                # Encode to base64 and decode bytes to string for JSON serialization
-                base64_content = base64.b64encode(content_bytes).decode('utf-8')
+            # Read the definition file
+            with open(definition_file, 'rb') as f:
+                definition_content = f.read()
             
-            # 3. Construct the JSON Payload
-            # API Doc: https://learn.microsoft.com/en-us/rest/api/fabric/core/items/create-item
-            payload = {
-                "displayName": item_name,
-                "type": item_type,
-                "definition": {
-                    "parts": [
-                        {
-                            "path": logical_path,
-                            "payload": base64_content,
-                            "payloadType": "InlineBase64"
-                        }
-                    ]
-                }
-            }
-            
-            # 4. Send Request
+            # Create item in target workspace using Fabric API
+            # POST to create an item from definition
             url = f"{self.fabric_api_url}/workspaces/{target_workspace_id}/items"
             
-            # Ensure headers are correct for JSON
             headers = self.get_headers()
-            # self.get_headers() already sets "Content-Type": "application/json"
+            headers['Content-Type'] = 'application/octet-stream'
+            
+            params = {
+                'type': item_type,
+                'displayName': item_name
+            }
             
             response = requests.post(
                 url,
                 headers=headers,
-                json=payload  # Use 'json' parameter to automatically serialize
+                params=params,
+                data=definition_content
             )
             
             if response.status_code in [200, 201, 202]:
-                print(f"[OK] Item '{item_name}' ({item_type}) created successfully")
+                print(f"[OK] Item '{item_name}' ({item_type}) created successfully in Prod workspace")
                 return True
             else:
                 print(f"[ERROR] Error creating item '{item_name}': {response.status_code} - {response.text[:200]}")
                 return False
-                
         except Exception as e:
             print(f"[ERROR] Error in copy_item_to_workspace: {e}")
             return False
